@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snakey</title>
+<style>
+  :root{
+    --bg:#17130e; --panel:#241d14; --line:#40331f; --text:#f3ead8; --muted:#a39478;
+    --banana:#ffd23f; --leaf:#7ccf5b; --bark:#a8743f;
+    --size:max(300px, min(94vw, calc(100vh - 190px)));
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:10px;
+  }
+  header, #chips, footer{ width:var(--size); }
+  header{display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap}
+  h1{margin:0; font-size:26px; color:var(--banana)}
+  .stats{display:flex; gap:20px; font-variant-numeric:tabular-nums}
+  .stat span{display:block; font-size:12px; color:var(--muted)}
+  .stat b{font-size:20px}
+  #chips{min-height:28px; display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  .chip{padding:3px 10px; border-radius:99px; font-size:13px; border:1px solid var(--line); background:var(--panel)}
+  .chip.slow{color:#6cc8ff; border-color:#6cc8ff55}
+  .chip.vine{color:#b69cff; border-color:#b69cff55}
+  .chip.x2{color:#7bf0b0; border-color:#7bf0b055}
+  .chip.combo{color:var(--banana); border-color:#ffd23f55}
+  .chip.info{color:var(--muted)}
+  .wrap{position:relative; width:var(--size); aspect-ratio:1; border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:0 20px 50px #0009}
+  canvas{display:block; width:100%; height:100%; touch-action:none}
+  #overlay{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    text-align:center; padding:18px; background:rgba(16,12,8,.88); overflow:auto;
+  }
+  #overlay.hidden{display:none}
+  #overlay h2{margin:0; font-size:32px; color:var(--banana)}
+  #overlay p{margin:0; max-width:460px; line-height:1.5}
+  .btns{display:flex; gap:10px; flex-wrap:wrap; justify-content:center}
+  button{
+    font:inherit; font-weight:600; padding:9px 22px; border-radius:10px; border:0; cursor:pointer;
+    background:var(--banana); color:#2a1f08;
+  }
+  button.sec{background:var(--panel); color:var(--text); border:1px solid var(--line)}
+  button.link{background:none; color:var(--muted); padding:2px 6px; font-weight:400; font-size:12px; text-decoration:underline}
+  button:hover{filter:brightness(1.1)}
+  button:focus-visible, input:focus-visible{outline:3px solid var(--leaf); outline-offset:2px}
+  #nameForm{display:flex; gap:8px}
+  #nameForm[hidden]{display:none}
+  #nameInput{
+    font:inherit; padding:9px 12px; border-radius:10px; border:1px solid var(--line);
+    background:var(--panel); color:var(--text); width:180px; text-align:center;
+  }
+  #lbBox{width:min(420px,100%)}
+  #lbBox[hidden]{display:none}
+  table{width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:14px}
+  th{font-weight:400; color:var(--muted); text-align:left; padding:3px 8px; font-size:12px}
+  td{padding:3px 8px; border-top:1px solid var(--line); text-align:left}
+  th:nth-child(n+3), td:nth-child(n+3){text-align:right}
+  tr:nth-child(2) td:first-child{color:#ffd23f} tr:nth-child(3) td:first-child{color:#cfd3d8} tr:nth-child(4) td:first-child{color:#d9945b}
+  tr.me td{background:#ffd23f1f; font-weight:700}
+  .empty{color:var(--muted)}
+  small{color:var(--muted); line-height:1.6}
+  #changelog{max-width:460px; text-align:left; font-size:12px; color:var(--muted)}
+  #changelog ul{margin:2px 0 0; padding-left:18px}
+  footer{font-size:13px; color:var(--muted); text-align:center}
+  kbd{background:var(--panel); border:1px solid var(--line); border-radius:5px; padding:1px 6px; font-size:12px}
+  #version{
+    position:fixed; right:12px; bottom:8px; font-size:12px; color:var(--muted);
+    background:var(--panel); border:1px solid var(--line); border-radius:99px; padding:2px 10px; cursor:help;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Snakey</h1>
+  <div class="stats">
+    <div class="stat"><span>Skóre</span><b id="score">0</b></div>
+    <div class="stat"><span>Rekord</span><b id="best">0</b></div>
+    <div class="stat"><span>Úroveň</span><b id="level">1</b></div>
+  </div>
+</header>
+<div id="chips"></div>
+
+<div class="wrap">
+  <canvas id="game"></canvas>
+  <div id="overlay">
+    <h2 id="ovTitle"></h2>
+    <p id="ovText"></p>
+    <form id="nameForm" autocomplete="off">
+      <input id="nameInput" maxlength="12" placeholder="Tvoje jméno" aria-label="Jméno do žebříčku">
+      <button type="submit">Uložit</button>
+    </form>
+    <div id="lbBox" hidden></div>
+    <div class="btns">
+      <button id="ovBtn"></button>
+      <button id="lbBtn" class="sec"></button>
+    </div>
+    <div id="changelog" hidden></div>
+    <small id="ovHint"></small>
+  </div>
+</div>
+
+<footer>
+  <kbd>↑ ↓ ← →</kbd> / <kbd>WASD</kbd> Pohyb
+</footer>
+
+<div id="version" title="">v0.5</div>
+
+<script>
+/* ============================================================
+   0) VERZE – při každém updatu zvedni číslo a přidej řádek do CHANGELOGU.
+      Číslo se samo propíše do pravého dolního rohu.
+   ============================================================ */
+const VERSION = "0.5";
+const CHANGELOG = [
+  { v: "0.5", notes: [
+      "Opice je zase kreslená (ne emoji), tělo je jednoduché kulaté jako u hada",
+      "Banány, překážky a power-upy zůstávají jako emoji"
+  ]},
+  { v: "0.4", notes: [
+      "Grafika je z emoji: 🐵 opice, 🍌 banány, 🪵 🪨 🌴 překážky, 🐌 🌿 ✨ power-upy",
+      "Na Macu a iPhonu se zobrazí jako Apple emoji, jinde jako emoji systému"
+  ]},
+  { v: "0.3", notes: [
+      "Zpět ke hře ve stylu hada: po hřišti jezdí opice a roste jí ocas",
+      "Nový vzhled džungle a žebříček zůstaly",
+      "Power-upy: zpomalení, liána (projdeš překážkami i ocasem), dvojnásobné body",
+      "Prostředí se mění podle úrovně: den, soumrak, noc"
+  ]},
+  { v: "0.2", notes: ["Opice jako běžecká hra, žebříček Top 10, nový vzhled"] },
+  { v: "0.1", notes: ["První verze: klasický had"] }
+];
+document.getElementById("version").textContent = "v" + VERSION;
+document.getElementById("version").title =
+  CHANGELOG.map(c => "v" + c.v + ":\n- " + c.notes.join("\n- ")).join("\n\n");
+
+/* ============================================================
+   1) NASTAVENÍ – tady si můžeš všechno ladit
+   ============================================================ */
+const COLS = 24, ROWS = 24, CELL = 26;
+const FOOD_PER_LEVEL = 6;          // kolik banánů do další úrovně
+const COMBO_WINDOW = 3000;         // ms na další banán, aby rostlo combo
+const GOLDEN_EVERY = 4;            // každý 4. banán se objeví i zlatý
+const GOLDEN_TTL = 6000;           // jak dlouho zlatý banán vydrží (ms)
+const POWER_TTL = 9000;            // jak dlouho power-up leží na hřišti (ms)
+const POWERS = {
+  slow: { label: "Zpomalení",        dur: 7000, color: "#6cc8ff", icon: "🐌" },
+  vine: { label: "Liána",            dur: 5000, color: "#b69cff", icon: "🌿" },
+  x2:   { label: "Dvojnásobné body", dur: 8000, color: "#7bf0b0", icon: "✨" }
+};
+
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+cv.width = COLS * CELL;
+cv.height = ROWS * CELL;
+
+const DIRS = { up:{x:0,y:-1}, down:{x:0,y:1}, left:{x:-1,y:0}, right:{x:1,y:0} };
+
+/* ============================================================
+   2) POMOCNÉ FUNKCE
+   ============================================================ */
+const rnd = n => Math.floor(Math.random() * n);
+const lerp = (a, b, t) => a + (b - a) * t;
+const hash = i => { const s = Math.sin(i * 127.1) * 43758.5453; return s - Math.floor(s); };
+const rgb = c => `rgb(${c.map(Math.round).join(",")})`;
+const mix = (a, b, t) => rgb(a.map((v, i) => lerp(v, b[i], t)));
+function safeGet(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+function safeSet(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+
+function seeded(seed){                       // stejná úroveň = stejné překážky
+  return function(){
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ============================================================
+   3) ZVUK
+   ============================================================ */
+let actx = null, muted = false;
+function beep(freq, dur = .08, type = "square", vol = .04, slide = 0){
+  if (muted) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    o.connect(g).connect(actx.destination);
+    o.start(); o.stop(t + dur);
+  } catch(e){}
+}
+
+/* ============================================================
+   4) ŽEBŘÍČEK (ukládá se v prohlížeči, Top 10)
+   ============================================================ */
+const LB_KEY = "opice-zebricek-v2";
+function lbLoad(){
+  try {
+    const a = JSON.parse(safeGet(LB_KEY) || "[]");
+    return Array.isArray(a) ? a : [];
+  } catch(e){ return []; }
+}
+function lbSave(a){ safeSet(LB_KEY, JSON.stringify(a)); }
+function lbQualifies(score){
+  if (score <= 0) return false;
+  const a = lbLoad();
+  return a.length < 10 || score > a[a.length - 1].score;
+}
+function lbAdd(name, score, level){
+  const a = lbLoad();
+  const id = Date.now() + "-" + rnd(1e6);
+  a.push({ id, name, score, level, date: Date.now() });
+  a.sort((x, y) => y.score - x.score);
+  lbSave(a.slice(0, 10));
+  return id;
+}
+function lbBest(){ const a = lbLoad(); return a.length ? a[0].score : 0; }
+
+/* ============================================================
+   5) BARVY PROSTŘEDÍ (den / soumrak / noc podle úrovně)
+   ============================================================ */
+const PALS = {
+  day:    { tileA:[88,152,70],  tileB:[80,142,64],  fur:[150,98,52], tail:[96,60,30] },
+  sunset: { tileA:[124,128,62], tileB:[114,118,56], fur:[134,86,46], tail:[90,56,28] },
+  night:  { tileA:[32,74,62],   tileB:[28,66,56],   fur:[134,86,46], tail:[90,56,28] }
+};
+const BIOMES = ["day", "sunset", "night"];
+const BIOME_NAMES = ["Džungle za dne", "Soumrak v džungli", "Noc v džungli"];
+
+/* ============================================================
+   6) ÚROVNĚ
+   1 = průchozí okraje, bez překážek
+   2 = pevné zdi
+   3+ = pevné zdi + překážky (vzory se opakují, od 7. přibývají náhodné bloky)
+   ============================================================ */
+function buildLevel(n){
+  const o = [];
+  const add = (x, y) => o.push({x, y});
+  if (n <= 2) return o;
+
+  const pat = (n - 3) % 4;
+  if (pat === 0){
+    for (let x = 6; x <= 17; x++) if (x < 10 || x > 13){ add(x, 6); add(x, 17); }
+  } else if (pat === 1){
+    for (const [px, py] of [[5,5],[17,5],[5,16],[17,16]])
+      for (let dx = 0; dx < 2; dx++) for (let dy = 0; dy < 2; dy++) add(px+dx, py+dy);
+  } else if (pat === 2){
+    for (let y = 3; y <= 8; y++){ add(9, y); add(14, y); }
+    for (let y = 15; y <= 20; y++){ add(9, y); add(14, y); }
+  } else {
+    for (let i = 8; i <= 15; i++){ add(i, 8); add(i, 15); }
+    for (let i = 9; i <= 14; i++){ if (i < 11 || i > 12){ add(8, i); add(15, i); } }
+  }
+  if (n >= 7){
+    const r = seeded(n * 977);
+    let count = (n - 6) * 2, guard = 0;
+    while (count > 0 && guard++ < 500){
+      const x = Math.floor(r() * COLS), y = Math.floor(r() * ROWS);
+      const nearStart = x <= 10 && y >= 10 && y <= 14;
+      if (nearStart || o.some(b => b.x === x && b.y === y)) continue;
+      add(x, y); count--;
+    }
+  }
+  return o;
+}
+const ruleText = level => level === 1 ? "Okraje jsou průchozí" : "Okraje jsou pevné";
+
+/* ============================================================
+   7) STAV HRY
+   ============================================================ */
+let G;
+function startBody(){
+  const sx = 6, sy = 12;
+  return [{x:sx,y:sy},{x:sx-1,y:sy},{x:sx-2,y:sy},{x:sx-3,y:sy}];   // hlava + ocas
+}
+
+function newGame(){
+  G = {
+    state: "playing",
+    body: startBody(), prev: null, dir: DIRS.right, queue: [], grow: 0,
+    score: 0, level: 1, eaten: 0, foodCount: 0, bananas: 0,
+    combo: 1, lastEat: -1e9,
+    obstacles: buildLevel(1),
+    food: null, golden: null, power: null,
+    fx: { slow: 0, vine: 0, x2: 0 },
+    particles: [], pops: [],
+    acc: 0, alpha: 1, shake: 0, time: 0, nextPower: 9000, banner: null,
+    deadT: 0, ended: false,
+    pal: G && G.pal ? G.pal : JSON.parse(JSON.stringify(PALS.day))
+  };
+  G.prev = G.body.map(s => ({...s}));
+  G.food = randFree();
+  hideOverlay();
+}
+
+function isFree(x, y){
+  const g = G;
+  return !g.body.some(s => s.x === x && s.y === y)
+      && !g.obstacles.some(o => o.x === x && o.y === y)
+      && !(g.food   && g.food.x === x   && g.food.y === y)
+      && !(g.golden && g.golden.x === x && g.golden.y === y)
+      && !(g.power  && g.power.x === x  && g.power.y === y);
+}
+function randFree(){
+  for (let i = 0; i < 600; i++){
+    const x = rnd(COLS), y = rnd(ROWS);
+    if (isFree(x, y)) return {x, y};
+  }
+  return null;
+}
+function interval(){
+  let ms = Math.max(62, 150 - (G.level - 1) * 9);
+  if (G.fx.slow > 0) ms *= 1.7;
+  return ms;
+}
+
+/* ============================================================
+   8) HERNÍ LOGIKA – jeden krok opice
+   ============================================================ */
+function tick(){
+  const g = G;
+  if (g.queue.length) g.dir = g.queue.shift();
+
+  const old = g.body.map(s => ({...s}));
+  let nx = old[0].x + g.dir.x, ny = old[0].y + g.dir.y;
+
+  if (g.level === 1){
+    nx = (nx + COLS) % COLS; ny = (ny + ROWS) % ROWS;
+  } else if (nx < 0 || ny < 0 || nx >= COLS || ny >= ROWS){
+    return die("Opice narazila do zdi.");
+  }
+
+  if (g.fx.vine <= 0){                                  // na liáně se překážky i ocas přeskočí
+    if (g.obstacles.some(o => o.x === nx && o.y === ny)) return die("Opice narazila do překážky.");
+    const tailCells = g.grow > 0 ? old : old.slice(0, -1);
+    if (tailCells.some(s => s.x === nx && s.y === ny)) return die("Opice zakopla o vlastní ocas.");
+  }
+
+  let ate = null;
+  if (g.food   && nx === g.food.x   && ny === g.food.y)   ate = "food";
+  else if (g.golden && nx === g.golden.x && ny === g.golden.y) ate = "golden";
+  else if (g.power  && nx === g.power.x  && ny === g.power.y)  ate = "power";
+
+  let grew = g.grow > 0;
+  if (grew) g.grow--;
+  if (ate === "food" || ate === "golden") grew = true;
+
+  g.body.unshift({x: nx, y: ny});
+  if (!grew) g.body.pop();
+  g.prev = old;
+  if (grew) g.prev.push({...old[old.length - 1]});
+
+  if (ate === "food" || ate === "golden"){
+    const base = ate === "golden" ? 50 : 10;
+    g.combo = (g.time - g.lastEat < COMBO_WINDOW) ? Math.min(g.combo + 1, 5) : 1;
+    g.lastEat = g.time;
+    const pts = base * g.combo * (g.fx.x2 > 0 ? 2 : 1);
+    g.score += pts; g.bananas++;
+    burst(nx, ny, ate === "golden" ? "#ffe066" : "#ffd23f", 14);
+    pop(nx, ny, "+" + pts, ate === "golden" ? "#ffe066" : "#fff");
+    beep(ate === "golden" ? 880 : 520, .09, "square", .05, 200);
+
+    if (ate === "golden"){
+      g.golden = null;
+    } else {
+      g.eaten++; g.foodCount++;
+      g.food = null;
+      if (g.eaten >= FOOD_PER_LEVEL){ levelUp(); return; }
+      g.food = randFree();
+      if (g.foodCount % GOLDEN_EVERY === 0 && !g.golden){
+        const c = randFree();
+        if (c) g.golden = {...c, ttl: GOLDEN_TTL};
+      }
+    }
+  } else if (ate === "power"){
+    const type = g.power.type;
+    g.fx[type] = POWERS[type].dur;
+    g.power = null;
+    burst(nx, ny, POWERS[type].color, 18);
+    pop(nx, ny, POWERS[type].label, POWERS[type].color);
+    beep(660, .15, "triangle", .06, 500);
+  }
+}
+
+function levelUp(){
+  const g = G;
+  g.level++; g.eaten = 0;
+  g.body = startBody(); g.prev = g.body.map(s => ({...s}));
+  g.dir = DIRS.right; g.queue = []; g.grow = 0;
+  g.obstacles = buildLevel(g.level);
+  g.food = null; g.golden = null; g.power = null;
+  g.food = randFree();
+  g.state = "levelup"; g.alpha = 1; g.acc = 0;
+  g.banner = { text: "Úroveň " + g.level, sub: BIOME_NAMES[(g.level - 1) % 3] + " · " + ruleText(g.level), t: 1700 };
+  [440, 554, 659, 880].forEach((f, i) => setTimeout(() => beep(f, .14, "triangle", .06), i * 110));
+}
+
+function die(reason){
+  const g = G;
+  g.state = "dead"; g.alpha = 1; g.shake = 300; g.deadReason = reason;
+  const h = g.body[0];
+  burst(Math.max(0, Math.min(COLS-1, h.x)), Math.max(0, Math.min(ROWS-1, h.y)), "#ffd23f", 30);
+  beep(160, .35, "sawtooth", .07, -110);
+}
+
+/* ============================================================
+   9) EFEKTY
+   ============================================================ */
+function burst(cx, cy, color, n){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2, s = .05 + Math.random() * .2;
+    G.particles.push({
+      x: (cx + .5) * CELL, y: (cy + .5) * CELL,
+      vx: Math.cos(a) * s, vy: Math.sin(a) * s,
+      life: 450 + Math.random() * 400, max: 850, size: 2 + Math.random() * 3, color
+    });
+  }
+}
+function pop(cx, cy, text, color){
+  G.pops.push({ x: (cx + .5) * CELL, y: cy * CELL, text, color, life: 900 });
+}
+
+/* ============================================================
+   10) UPDATE
+   ============================================================ */
+function update(dt){
+  const g = G;
+
+  const target = PALS[BIOMES[(g.level - 1) % 3]];
+  const k = 1 - Math.exp(-dt / 700);
+  for (const key in target) for (let i = 0; i < 3; i++) g.pal[key][i] = lerp(g.pal[key][i], target[key][i], k);
+
+  for (const p of g.particles){ p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+  g.particles = g.particles.filter(p => p.life > 0);
+  for (const p of g.pops){ p.y -= .03 * dt; p.life -= dt; }
+  g.pops = g.pops.filter(p => p.life > 0);
+  if (g.shake > 0) g.shake -= dt;
+
+  if (g.state === "dead"){
+    g.deadT += dt;
+    if (g.deadT > 800 && !g.ended){ g.ended = true; showEnd(); }
+    return;
+  }
+  if (g.state === "levelup"){
+    g.banner.t -= dt;
+    if (g.banner.t <= 0){ g.state = "playing"; g.banner = null; }
+    return;
+  }
+  if (g.state !== "playing") return;
+
+  g.time += dt;
+  for (const key in g.fx) g.fx[key] = Math.max(0, g.fx[key] - dt);
+  if (g.golden){ g.golden.ttl -= dt; if (g.golden.ttl <= 0) g.golden = null; }
+  if (g.power){ g.power.ttl -= dt; if (g.power.ttl <= 0) g.power = null; }
+
+  g.nextPower -= dt;
+  if (g.nextPower <= 0 && !g.power){
+    const c = randFree();
+    if (c){
+      const keys = Object.keys(POWERS);
+      g.power = { ...c, type: keys[rnd(keys.length)], ttl: POWER_TTL };
+    }
+    g.nextPower = 9000 + Math.random() * 7000;
+  }
+
+  g.acc += dt;
+  const iv = interval();
+  while (g.acc >= iv && g.state === "playing"){ g.acc -= iv; tick(); }
+  g.alpha = g.state === "playing" ? Math.min(g.acc / iv, 1) : 1;
+}
+
+/* ============================================================
+   11) VYKRESLENÍ
+   ============================================================ */
+function rrect(x, y, w, h, r){
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+}
+
+// Emoji se kreslí fontem systému: na Macu/iPhonu je to Apple Color Emoji
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+function drawEmoji(ch, x, y, size, rot = 0){
+  ctx.save();
+  ctx.translate(x, y);
+  if (rot) ctx.rotate(rot);
+  ctx.font = `${Math.round(size)}px ${EMOJI_FONT}`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText(ch, 0, size * .06);
+  ctx.restore();
+}
+
+function drawBoard(){
+  const p = G.pal, Wd = cv.width, Ht = cv.height;
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++){
+    ctx.fillStyle = rgb((x + y) % 2 ? p.tileB : p.tileA);
+    ctx.fillRect(x * CELL, y * CELL, CELL, CELL);
+  }
+  // drobné trsy trávy
+  ctx.strokeStyle = mix(p.tileA, [0, 30, 0], .35); ctx.lineWidth = 1.5; ctx.lineCap = "round";
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++){
+    if (hash(x * 37 + y * 91) > .88){
+      const cx = x * CELL + 6 + hash(x + y * 7) * 14, cy = y * CELL + 18;
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy); ctx.lineTo(cx - 4, cy - 6);
+      ctx.moveTo(cx, cy);     ctx.lineTo(cx, cy - 8);
+      ctx.moveTo(cx + 3, cy); ctx.lineTo(cx + 4, cy - 6);
+      ctx.stroke();
+    }
+  }
+  // okraj: čárkovaný = průchozí, dřevěný = zeď
+  if (G.level === 1){
+    ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,230,140,.45)"; ctx.setLineDash([8, 8]);
+    ctx.strokeRect(2, 2, Wd - 4, Ht - 4); ctx.setLineDash([]);
+  } else {
+    ctx.lineWidth = 8; ctx.strokeStyle = "#7a4f26"; ctx.strokeRect(4, 4, Wd - 8, Ht - 8);
+    ctx.lineWidth = 2; ctx.strokeStyle = "#b98448"; ctx.strokeRect(7, 7, Wd - 14, Ht - 14);
+  }
+}
+
+const OBSTACLE_EMOJI = ["🪵", "🪨", "🌴"];
+function drawObstacle(o){
+  const ch = OBSTACLE_EMOJI[Math.floor(hash(o.x * 31 + o.y * 17) * OBSTACLE_EMOJI.length)];
+  drawEmoji(ch, (o.x + .5) * CELL, (o.y + .5) * CELL, CELL * 1.02);
+}
+
+function drawBanana(x, y, gold, s){
+  ctx.save();
+  if (gold){ ctx.shadowColor = "#ffd23f"; ctx.shadowBlur = 18; }
+  drawEmoji("🍌", x, y, CELL * 1.05 * s, -.2);
+  ctx.restore();
+}
+
+function visPos(i){
+  const g = G, c = g.body[i], p = g.prev[i] || c, t = g.alpha;
+  if (Math.abs(c.x - p.x) > 1 || Math.abs(c.y - p.y) > 1) return {x: c.x, y: c.y};   // průchod přes okraj
+  return { x: p.x + (c.x - p.x) * t, y: p.y + (c.y - p.y) * t };
+}
+
+function drawMonkey(pts, dir){
+  const p = G.pal, n = pts.length;
+  ctx.lineCap = "round";
+
+  // tělo: jednoduché kulaté články jako u hada, od hlavy ke špičce se zužuje a ztmavuje
+  for (let i = n - 1; i >= 1; i--){
+    const k = i / Math.max(1, n - 1);
+    const w = CELL * (.84 - .34 * k);
+    const col = mix(p.fur, p.tail, k);
+    const a = pts[i], cx = (a.x + .5) * CELL, cy = (a.y + .5) * CELL;
+    ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = w;
+    const b = pts[i - 1];
+    if (Math.abs(a.x - b.x) <= 1.5 && Math.abs(a.y - b.y) <= 1.5){
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo((b.x + .5) * CELL, (b.y + .5) * CELL); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, w / 2, 0, 7); ctx.fill();
+  }
+
+  // hlava opice
+  const h = pts[0], cx = (h.x + .5) * CELL, cy = (h.y + .5) * CELL;
+  const px = -dir.y, py = dir.x, r0 = CELL * .5;
+  const fur = rgb(p.fur), face = "#ecc9a0";
+  for (const s of [-1, 1]){                             // uši
+    const ex = cx + px * s * r0 * .92 - dir.x * 3, ey = cy + py * s * r0 * .92 - dir.y * 3;
+    ctx.fillStyle = fur; ctx.beginPath(); ctx.arc(ex, ey, r0 * .38, 0, 7); ctx.fill();
+    ctx.fillStyle = face; ctx.beginPath(); ctx.arc(ex, ey, r0 * .2, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = fur; ctx.beginPath(); ctx.arc(cx, cy, r0 * .95, 0, 7); ctx.fill();
+  ctx.fillStyle = face; ctx.beginPath(); ctx.arc(cx + dir.x * 2.5, cy + dir.y * 2.5, r0 * .66, 0, 7); ctx.fill();
+  for (const s of [-1, 1]){                             // oči
+    const ex = cx + dir.x * 5 + px * s * 4.4, ey = cy + dir.y * 5 + py * s * 4.4;
+    ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ex, ey, 3, 0, 7); ctx.fill();
+    ctx.fillStyle = "#1a1008"; ctx.beginPath(); ctx.arc(ex + dir.x * 1.1, ey + dir.y * 1.1, 1.6, 0, 7); ctx.fill();
+  }
+  ctx.fillStyle = "#5a3519";                            // čumák
+  ctx.beginPath(); ctx.arc(cx + dir.x * 9.5, cy + dir.y * 9.5, 1.8, 0, 7); ctx.fill();
+}
+
+function render(){
+  const g = G, Wd = cv.width, Ht = cv.height, now = performance.now();
+  ctx.save();
+  ctx.clearRect(0, 0, Wd, Ht);
+  if (g.shake > 0){ const s = g.shake / 300 * 7; ctx.translate((Math.random() - .5) * s, (Math.random() - .5) * s); }
+
+  drawBoard();
+  for (const o of g.obstacles) drawObstacle(o);
+
+  if (g.food) drawBanana((g.food.x + .5) * CELL, (g.food.y + .5) * CELL + 1, false, 1 + .08 * Math.sin(now / 180));
+  if (g.golden){
+    const cx = (g.golden.x + .5) * CELL, cy = (g.golden.y + .5) * CELL;
+    drawBanana(cx, cy + 1, true, 1.05 + .12 * Math.sin(now / 110));
+    ctx.strokeStyle = "#ffd23f"; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.arc(cx, cy, CELL * .48, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (g.golden.ttl / GOLDEN_TTL)); ctx.stroke();
+  }
+  if (g.power){
+    const P = POWERS[g.power.type];
+    const cx = (g.power.x + .5) * CELL, cy = (g.power.y + .5) * CELL;
+    const blink = g.power.ttl < 2500 && Math.floor(now / 150) % 2 === 0;
+    if (!blink){
+      ctx.save();
+      ctx.fillStyle = P.color; ctx.globalAlpha = .45; ctx.shadowColor = P.color; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(cx, cy, CELL * .5, 0, 7); ctx.fill();
+      ctx.restore();
+      drawEmoji(P.icon, cx, cy, CELL * .95 * (1 + .06 * Math.sin(now / 200)));
+    }
+  }
+
+  ctx.globalAlpha = g.fx.vine > 0 ? .55 : 1;
+  drawMonkey(g.body.map((_, i) => visPos(i)), g.dir);
+  ctx.globalAlpha = 1;
+
+  for (const p of g.particles){
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    ctx.fillStyle = p.color; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.font = "700 14px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for (const p of g.pops){
+    ctx.globalAlpha = Math.min(1, p.life / 400);
+    ctx.fillStyle = p.color; ctx.fillText(p.text, p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+
+  if (g.state === "levelup" && g.banner){
+    ctx.fillStyle = "rgba(16,12,8,.62)"; ctx.fillRect(0, 0, Wd, Ht);
+    ctx.fillStyle = "#ffd23f"; ctx.font = "700 46px system-ui, sans-serif";
+    ctx.fillText(g.banner.text, Wd / 2, Ht / 2 - 14);
+    ctx.fillStyle = "#f3ead8"; ctx.font = "400 18px system-ui, sans-serif";
+    ctx.fillText(g.banner.sub, Wd / 2, Ht / 2 + 28);
+  }
+  ctx.restore();
+}
+
+/* ============================================================
+   12) HUD
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const elScore = $("score"), elBest = $("best"), elLevel = $("level"), elChips = $("chips");
+let lastChips = "";
+function updateHUD(){
+  const g = G;
+  elScore.textContent = g.score;
+  elBest.textContent = Math.max(lbBest(), g.state === "menu" ? 0 : g.score);
+  elLevel.textContent = g.level;
+  let html = `<span class="chip info">${ruleText(g.level)} · 🍌 ${g.eaten}/${FOOD_PER_LEVEL}</span>`;
+  if (g.time - g.lastEat < COMBO_WINDOW && g.combo > 1) html += `<span class="chip combo">Combo ×${g.combo}</span>`;
+  for (const k in POWERS) if (g.fx[k] > 0)
+    html += `<span class="chip ${k}">${POWERS[k].icon} ${POWERS[k].label} ${(g.fx[k] / 1000).toFixed(1)} s</span>`;
+  if (html !== lastChips){ elChips.innerHTML = html; lastChips = html; }
+}
+
+/* ============================================================
+   13) OVERLAY (menu, pauza, konec, žebříček)
+   ============================================================ */
+const ov = $("overlay"), ovTitle = $("ovTitle"), ovText = $("ovText"), ovBtn = $("ovBtn"), lbBtn = $("lbBtn");
+const ovHint = $("ovHint"), nameForm = $("nameForm"), nameInput = $("nameInput"), lbBox = $("lbBox"), changelogBox = $("changelog");
+let ovState = null, ovLock = 0;
+
+function renderLb(hl){
+  const a = lbLoad();
+  lbBox.replaceChildren();
+  if (!a.length){
+    const p = document.createElement("p"); p.className = "empty"; p.textContent = "Zatím tu nikdo není. Buď první!";
+    lbBox.append(p); return;
+  }
+  const tbl = document.createElement("table");
+  const head = tbl.insertRow();
+  ["#", "Jméno", "Skóre", "Úroveň"].forEach(t => { const th = document.createElement("th"); th.textContent = t; head.append(th); });
+  a.forEach((e, i) => {
+    const tr = tbl.insertRow();
+    if (e.id === hl) tr.className = "me";
+    [i + 1, e.name, e.score, e.level].forEach(v => { tr.insertCell().textContent = v; });
+  });
+  lbBox.append(tbl);
+  const clr = document.createElement("button");
+  clr.className = "link"; clr.textContent = "Vymazat žebříček";
+  clr.onclick = () => { if (confirm("Opravdu smazat celý žebříček?")){ lbSave([]); renderLb(null); } };
+  lbBox.append(clr);
+}
+
+function showOverlay(o){
+  ovState = o;
+  ovTitle.textContent = o.title;
+  ovText.textContent = o.text || "";
+  ovText.style.display = o.text ? "" : "none";
+  ovBtn.textContent = o.primary;
+  lbBtn.style.display = o.lbToggle ? "" : "none";
+  lbBtn.textContent = o.lbOpen ? "Skrýt žebříček" : "Žebříček";
+  nameForm.hidden = !o.form;
+  lbBox.hidden = !o.lbOpen;
+  if (o.lbOpen) renderLb(o.highlight);
+  changelogBox.hidden = !o.changelog;
+  if (o.changelog){
+    changelogBox.replaceChildren();
+    const b = document.createElement("b"); b.textContent = "Novinky ve verzi " + CHANGELOG[0].v; changelogBox.append(b);
+    const ul = document.createElement("ul");
+    CHANGELOG[0].notes.forEach(n => { const li = document.createElement("li"); li.textContent = n; ul.append(li); });
+    changelogBox.append(ul);
+  }
+  ovHint.textContent = o.hint || "";
+  ov.classList.remove("hidden");
+  if (o.form) nameInput.focus({ preventScroll: true }); else ovBtn.focus({ preventScroll: true });
+}
+function hideOverlay(){ ov.classList.add("hidden"); }
+
+function doPrimary(){
+  if (performance.now() < ovLock) return;
+  if (ovState && ovState.onPrimary) ovState.onPrimary();
+}
+ovBtn.addEventListener("click", doPrimary);
+lbBtn.addEventListener("click", () => {
+  if (!ovState) return;
+  ovState.lbOpen = !ovState.lbOpen;
+  showOverlay(ovState);
+});
+
+function showMenu(){
+  showOverlay({
+    title: "Snakey",
+    text: "Veď 🐵 džunglí a sbírej 🍌. S každým banánem je jí delší ocas, tak si ho nepřejeď. Power-upy: 🐌 zpomalení, 🌿 liána (projdeš překážkami i ocasem), ✨ dvojnásobné body. Od druhé úrovně jsou okraje pevné a od třetí přibývají překážky.",
+    primary: "Hrát", onPrimary: newGame, lbToggle: true, lbOpen: false, changelog: true,
+    hint: "Šipky nebo WASD · pauza: mezerník"
+  });
+}
+function pauseGame(){
+  if (G.state !== "playing") return;
+  G.state = "paused";
+  showOverlay({ title: "Pauza", text: "", primary: "Pokračovat", onPrimary: resumeGame, lbToggle: true, lbOpen: false, hint: "P nebo mezerník" });
+}
+function resumeGame(){ G.state = "playing"; hideOverlay(); }
+
+function showEnd(){
+  const g = G, score = g.score, lvl = g.level;
+  const summary = `${g.deadReason} Skóre ${score} · úroveň ${lvl} · ${g.bananas} banánů`;
+  ovLock = performance.now() + 700;
+  if (lbQualifies(score)){
+    nameInput.value = safeGet("opice-name") || "";
+    showOverlay({
+      title: "Konec hry", text: summary + ". Dostal ses do žebříčku, zadej jméno.",
+      primary: "Přeskočit a hrát znovu", onPrimary: newGame, form: true, lbOpen: false,
+      onSave: name => {
+        const id = lbAdd(name, score, lvl);
+        showOverlay({ title: "Konec hry", text: summary, primary: "Hrát znovu", onPrimary: newGame, lbOpen: true, highlight: id });
+        ovLock = performance.now() + 400;
+      }
+    });
+  } else {
+    showOverlay({ title: "Konec hry", text: summary, primary: "Hrát znovu", onPrimary: newGame, lbOpen: true });
+  }
+}
+nameForm.addEventListener("submit", e => {
+  e.preventDefault();
+  const name = (nameInput.value.trim() || "Opice").slice(0, 12);
+  safeSet("opice-name", name);
+  if (ovState && ovState.onSave) ovState.onSave(name);
+});
+
+/* ============================================================
+   14) OVLÁDÁNÍ
+   ============================================================ */
+function setDir(d){
+  if (G.state !== "playing") return;
+  const last = G.queue.length ? G.queue[G.queue.length - 1] : G.dir;
+  if (d.x === last.x && d.y === last.y) return;
+  if (d.x === -last.x && d.y === -last.y) return;
+  if (G.queue.length < 3) G.queue.push(d);
+}
+const KEYS = {
+  ArrowUp: "up", KeyW: "up", ArrowDown: "down", KeyS: "down",
+  ArrowLeft: "left", KeyA: "left", ArrowRight: "right", KeyD: "right"
+};
+window.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT") return;
+  if (KEYS[e.code]){ e.preventDefault(); setDir(DIRS[KEYS[e.code]]); return; }
+  if (e.code === "KeyM"){ muted = !muted; return; }
+  if (e.code === "Space" || e.code === "Enter" || e.code === "KeyP" || e.code === "Escape"){
+    if (e.target.tagName === "BUTTON" && (e.code === "Space" || e.code === "Enter")) return;  // klik si vyřídí tlačítko
+    if (e.code === "Space" || e.code === "Enter") e.preventDefault();
+    if (G.state === "playing"){
+      if (e.code !== "Enter") pauseGame();
+    } else if (G.state === "paused"){
+      if (e.code !== "Enter") resumeGame(); else doPrimary();
+    } else if (!ov.classList.contains("hidden") && (e.code === "Space" || e.code === "Enter")){
+      doPrimary();
+    }
+  }
+});
+
+let touchStart = null;
+cv.addEventListener("touchstart", e => { const t = e.touches[0]; touchStart = {x: t.clientX, y: t.clientY}; }, {passive: true});
+cv.addEventListener("touchend", e => {
+  if (!touchStart) return;
+  const t = e.changedTouches[0], dx = t.clientX - touchStart.x, dy = t.clientY - touchStart.y;
+  touchStart = null;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
+  if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? DIRS.right : DIRS.left);
+  else setDir(dy > 0 ? DIRS.down : DIRS.up);
+}, {passive: true});
+
+document.addEventListener("visibilitychange", () => { if (document.hidden) pauseGame(); });
+
+/* ============================================================
+   15) START
+   ============================================================ */
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(50, now - last); last = now;
+  update(dt);
+  render();
+  updateHUD();
+  requestAnimationFrame(frame);
+}
+
+newGame();
+G.state = "menu";
+showMenu();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
